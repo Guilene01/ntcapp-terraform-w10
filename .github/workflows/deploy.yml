@@ -40,11 +40,6 @@ jobs:
         run: terraform fmt -check -recursive -diff || (echo "Formating issues found. Please run 'terraform fmt' locally.")
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      - name: Terraform Init
-        id: init
-        run: terraform init
-        working-directory: ${{ env.TF_WORKING_DIR }}
-      
       - name: TFLint - Terraform Linter
         uses: terraform-linters/setup-tflint@v3
         with:
@@ -60,7 +55,10 @@ jobs:
           directory: ${{ env.TF_WORKING_DIR }}
           framework: terraform
           quiet: true  
-  
+      
+      - name: Terraform Init with Upgrade
+        run: terraform init -upgrade
+        working-directory: ${{ env.TF_WORKING_DIR }}
 
       # - name: Terraform Validate
       #   id: validate
