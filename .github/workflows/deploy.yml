@@ -3,8 +3,6 @@ name: Terraform CI/CD
 on:
   push:
     branches: ["main"]
-  #pull_request:
-    #branches: ["main"]
 
 jobs:
   terraform:
@@ -15,29 +13,26 @@ jobs:
       contents: read     # Required for actions/checkout
 
     env:
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_REGION: ${{ vars.AWS_REGION }}
       TF_WORKING_DIR: ./terraform
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4  # Updated to v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.9.8
       
-      - name: Install-aws-cli
-        uses: unfor19/install-aws-cli-action@v1
-        with:
-            version: 2                         
-            verbose: false                     
-            arch: amd64
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}  # Use secret directly
           aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-${{ github.sha }}
 
-      # Next steps: Terraform Init, Plan, Apply, scans, etc.
+      - name: Verify AWS credentials
+        run: |
+          aws sts get-caller-identity
+          echo "AWS credentials configured successfully"
