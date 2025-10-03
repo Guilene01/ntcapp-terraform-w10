@@ -4,36 +4,34 @@ on:
   push:
     branches: ["main"]
   pull_request:
-    branches:
-      - main
+    branches: ["main"]
 
 jobs:
   terraform:
-    name: 'Terraform'
+    name: Terraform
     runs-on: ubuntu-latest
     permissions:
-      id-token: write   # Required for OIDC
-      contents: read    # Required for actions/checkout
+      id-token: write    # Required for OIDC
+      contents: read     # Required for actions/checkout
 
     env:
-      AWS_ROLE_ARN: "${{ secrets.AWS_ROLE_ARN }}"
-      AWS_REGION: "${{ vars.AWS_REGION}}"
-      TF_WORKING_DIR: ./terraform # path to your Terraform config
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      TF_WORKING_DIR: ./terraform
 
     steps:
-    # 1. Checkout repository
       - name: Checkout repo
         uses: actions/checkout@v3
-    # 2. Setup Terraform
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.9.8
 
-    # 3. Configure AWS credentials
-      - name: Configure AWS credentials using OIDC
+      - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: "${{ secrets.AWS_ROLE_ARN }}"
-          aws-region: "${{ vars.AWS_REGION }}"      
-      
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Next steps: Terraform Init, Plan, Apply, scans, etc.
