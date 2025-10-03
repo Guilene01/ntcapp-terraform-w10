@@ -44,6 +44,16 @@ jobs:
         id: init
         run: terraform init
         working-directory: ${{ env.TF_WORKING_DIR }}
+      
+      - name: TFLint - Terraform Linter
+        uses: terraform-linters/setup-tflint@v3
+        with:
+          tflint_version: v0.50.3
+      
+      - name: Run TFLint
+        run: tflint --init && tflint
+        working-directory: ${{ env.TF_WORKING_DIR }}
+  
 
       # - name: Terraform Validate
       #   id: validate
