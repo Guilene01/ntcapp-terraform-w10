@@ -1,27 +1,26 @@
 #!/bin/bash
-# Update packages
+set -e
+
+# Install and start NGINX
 sudo dnf update -y
-
-# Install nginx
 sudo dnf install nginx -y
-
-# Start and enable nginx
 sudo systemctl start nginx
 sudo systemctl enable nginx
 
-# Create a simple index page
+# Create index page with instance info
+INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 echo "<html>
   <head><title>Welcome</title></head>
   <body>
-    <h1>Welcome to Utrains</h1>
-    <p>You are redirected to $(hostname) to see how the load balancer is sharing the traffic.</p>
+    <h1>Welcome to NTC App</h1>
+    <p>Instance: $INSTANCE_ID</p>
+    <p>You are redirected to $(hostname) to see load balancer traffic distribution.</p>
   </body>
 </html>" | sudo tee /usr/share/nginx/html/index.html > /dev/null
 
-# Install CloudWatch Agent
+# Install and configure CloudWatch Agent
 sudo dnf install -y amazon-cloudwatch-agent
 
-# Create CloudWatch Agent config to monitor nginx logs
 cat <<EOF | sudo tee /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 {
   "logs": {
@@ -31,12 +30,12 @@ cat <<EOF | sudo tee /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agen
           {
             "file_path": "/var/log/nginx/access.log",
             "log_group_name": "/ec2/nginx/access",
-            "log_stream_name": "{instance_id}"
+            "log_stream_name": "$INSTANCE_ID"
           },
           {
             "file_path": "/var/log/nginx/error.log",
             "log_group_name": "/ec2/nginx/error",
-            "log_stream_name": "{instance_id}"
+            "log_stream_name": "$INSTANCE_ID"
           }
         ]
       }
@@ -45,6 +44,7 @@ cat <<EOF | sudo tee /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agen
 }
 EOF
 
-# Start CloudWatch Agent
 sudo systemctl enable amazon-cloudwatch-agent
 sudo systemctl start amazon-cloudwatch-agent
+
+echo "Setup completed!"
