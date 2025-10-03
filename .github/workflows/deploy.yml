@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: "us-east-1"
-  TF_WORKING_DIR: "./ntcapp-terraform-w10"
+  TF_WORKING_DIR: "./terraform"
 
 permissions:
   id-token: write
