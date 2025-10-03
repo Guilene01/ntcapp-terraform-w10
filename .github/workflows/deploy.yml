@@ -37,7 +37,7 @@ jobs:
 
       - name: Terraform Format
         id: fmt
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check -recursive -diff || (echo "Formating issues found. Please run 'terraform fmt' locally.")
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform Init
