@@ -1,38 +1,46 @@
-# .github/workflows/test-oidc.yml
-name: Test OIDC Connection
+# .github/workflows/manual-oidc.yml
+name: Manual OIDC Test
 
 on:
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  test-oidc:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Debug OIDC Token
-        id: oidc-token
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const token = await core.getIDToken()
-            console.log('OIDC Token obtained, length:', token.length)
-            core.setOutput('token', token)
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-1
-          role-session-name: GitHubOIDCTest
-
-      - name: Test AWS 
+      - name: Get OIDC Token
+        id: token
         run: |
-          echo "Testing AWS credentials..."
+          # Request the OIDC token
+          RESPONSE=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
+            -H "Accept: application/json; api-version=2.0" \
+            -H "Content-Type: application/json")
+          TOKEN=$(echo $RESPONSE | jq -r '.value')
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+          echo "Token length: ${#TOKEN}"
+
+      - name: Assume Role with OIDC
+        run: |
+          # Assume role using the OIDC token
+          CREDS=$(aws sts assume-role-with-web-identity \
+            --role-arn ${{ secrets.AWS_ROLE_ARN }} \
+            --role-session-name GitHubManualOIDC \
+            --web-identity-token "${{ steps.token.outputs.token }}" \
+            --duration-seconds 3600 \
+            --output json)
+          
+          echo "AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.Credentials.AccessKeyId')" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.Credentials.SecretAccessKey')" >> $GITHUB_ENV
+          echo "AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.Credentials.SessionToken')" >> $GITHUB_ENV
+
+      - name: Test AWS
+        run: |
           aws sts get-caller-identity
-          echo "✅ Success! OIDC is working."
