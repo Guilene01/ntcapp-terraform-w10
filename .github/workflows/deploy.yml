@@ -6,35 +6,37 @@ on:
   pull_request:
     branches: ["main"]
 
+env:
+  AWS_REGION: "us-east-1"
+  TF_WORKING_DIR: "./terraform"
+
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   terraform:
-    name: Terraform
+    name: Terraform Plan and Apply
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write    # Required for OIDC
-      contents: read     # Required for actions/checkout
-
-    env:
-      AWS_REGION: ${{ vars.AWS_REGION }}
-      TF_WORKING_DIR: ./terraform
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4  # Updated to v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Terraform
+
+      - name: Verify AWS credentials
+        run: |
+          echo "Testing AWS credentials..."
+          aws sts get-caller-identity
+          echo "✅ AWS credentials are working!"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.9.8
-      
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}  # Use secret directly
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-${{ github.sha }}
-
-      - name: Verify AWS credentials
-        run: |
-          aws sts get-caller-identity
-          echo "AWS credentials configured successfully"
+          terraform_version: "1.9.8"
