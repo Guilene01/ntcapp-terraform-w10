@@ -31,7 +31,7 @@ jobs:
           aws-region: us-east-1
           role-session-name: GitHubOIDCTest
 
-      - name: Test AWS Access
+      - name: Test AWS 
         run: |
           echo "Testing AWS credentials..."
           aws sts get-caller-identity
