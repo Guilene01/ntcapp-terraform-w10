@@ -1,42 +1,38 @@
-name: Terraform CI/CD
+# .github/workflows/test-oidc.yml
+name: Test OIDC Connection
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
-
-env:
-  AWS_REGION: "us-east-1"
-  TF_WORKING_DIR: "./terraform"
+  workflow_dispatch:  # Allows manual trigger
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  terraform:
-    name: Terraform Plan and Apply
+  test-oidc:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Debug OIDC Token
+        id: oidc-token
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const token = await core.getIDToken()
+            console.log('OIDC Token obtained, length:', token.length)
+            core.setOutput('token', token)
+
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: GitHubActions-Terraform
+          aws-region: us-east-1
+          role-session-name: GitHubOIDCTest
 
-      - name: Verify AWS credentials
+      - name: Test AWS Access
         run: |
           echo "Testing AWS credentials..."
           aws sts get-caller-identity
-          echo "✅ AWS credentials are working!"
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: "1.9.8"
+          echo "✅ Success! OIDC is working."
