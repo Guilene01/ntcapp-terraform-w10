@@ -111,7 +111,7 @@ jobs:
 
       - name: Comment Infracost results on PR
         if: ${{ github.event_name == 'pull_request' }}
-        uses: infracost/infracost-gh-action@v2
+        uses: infracost/infracost-gh-action@0.10.0
         with:
           path: infracost.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
