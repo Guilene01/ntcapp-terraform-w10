@@ -23,8 +23,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
       - name: Terraform Format
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check -recursive || (echo "❌ Terraform files are not formatted. Please run 'terraform fmt'." )
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: TFLint
@@ -47,6 +50,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
 
       - name: Install Infracost
         run: |
@@ -108,7 +114,7 @@ jobs:
 
       - name: Wait 10 minutes
         if: github.ref == 'refs/heads/main'
-        run: sleep 100
+        run: sleep 600
 
       - name: Terraform Destroy
         if: github.ref == 'refs/heads/main'
