@@ -44,8 +44,8 @@ resource "aws_lb" "alb" {
   subnets            = [aws_subnet.public1.id, aws_subnet.public2.id]
   
   # ✅ SECURITY FIXES
-  enable_deletion_protection = true
-  drop_invalid_header_fields = true
+  enable_deletion_protection = false
+  drop_invalid_header_fields = false
   enable_http2               = true
 
   tags = {
