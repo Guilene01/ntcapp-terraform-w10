@@ -67,7 +67,7 @@ jobs:
 
       - name: Generate Cost Report
         run: |
-          terraform init
+          terraform init -upgrade
           echo "=== COST ESTIMATE ==="
           ./infracost breakdown --path . --format table
           echo "====================="
@@ -93,7 +93,7 @@ jobs:
         uses: hashicorp/setup-terraform@v2
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -upgrade
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform Validate
