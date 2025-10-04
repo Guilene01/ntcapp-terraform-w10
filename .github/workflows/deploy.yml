@@ -114,7 +114,7 @@ jobs:
         run: |
           ALB_DNS=$(terraform output -raw alb_dns_name 2>/dev/null || echo "")
           if [ -n "$ALB_DNS" ]; then
-            curl -s http://$ALB_DNS/ && echo "✅ ALB is working"
+            curl -s http://$ALB_DNS/ && echo " ALB is working"
           fi
         working-directory: ${{ env.TF_WORKING_DIR }}
 
