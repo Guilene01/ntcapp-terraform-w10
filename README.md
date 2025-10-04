@@ -1,61 +1,292 @@
-Terraform CI/CD Workflow
+# Terraform CI/CD Workflow
 
-This repository contains a GitHub Actions CI/CD workflow for Terraform, designed to help teams manage infrastructure, security, and cost in a safe and automated way.
+This repository demonstrates a **professional CI/CD pipeline for Terraform** using GitHub Actions. It includes **security scans, cost estimation, and automated deployments**.
 
-Workflow Features
+---
 
-Security Scans
+## **Features**
 
-TFLint: Lints Terraform code for best practices.
+1. **Security Scans**
+   - **TFLint:** Terraform linter for code quality.
+   - **Checkov:** Detects security misconfigurations in Terraform code.
 
-Checkov: Scans Terraform code for security and compliance issues.
+2. **Cost Analysis**
+   - **Infracost:** Estimates cloud costs before deployment.
+   - Generates `infracost.json` artifact for inspection.
+   - Optional PR comments with cost breakdown.
 
-Cost Analysis
+3. **Terraform Automation**
+   - `terraform fmt` and `terraform validate`.
+   - Plan, Apply, and optional Destroy steps.
+   - Conditional deployment only on `main` branch.
 
-Infracost: Generates accurate cost estimates from Terraform plans.
+4. **Caching**
+   - Terraform providers and Infracost CLI are cached to speed up workflows.
 
-Automatically comments cost changes on pull requests.
+---
 
-Supports API key configuration via GitHub Secrets (INFRACOST_API_KEY).
+## **Pre-requisites**
 
-Infrastructure Deployment
+- **GitHub Secrets**
+  - `AWS_ROLE_ARN`: Role to assume in AWS for Terraform.
+  - `INFRACOST_API_KEY`: API key for Infracost.
+  - `GITHUB_TOKEN`: Provided automatically for PR comments.
 
-Terraform plan, validate, and apply (only on main branch).
+- **Terraform directory**
+  - Default working directory: `./terraform`.
+  - Must include Terraform files (`*.tf`).
 
-Optional health check for deployed resources (like ALB).
+---
 
-Automatic destroy of resources after testing to prevent unnecessary cloud costs.
+## **Workflow Overview**
 
-Optimizations
+### **1. Security Scan**
+- Runs on PRs and `main` branch pushes.
+- Lints Terraform code (`terraform fmt` and `tflint`).
+- Runs Checkov security scans.
+- Failures block merges unless `soft_fail: true`.
 
-Caching Terraform providers for faster CI runs.
+### **2. Cost Analysis**
+- Installs Infracost CLI.
+- Generates `infracost.json` with cost breakdown.
+- Uploads artifact for download from workflow run.
+- Optional PR comments with cost summary.
 
-Caching Infracost CLI to avoid repeated installation.
+### **3. Terraform Deploy & Test**
+- Runs on `main` branch push only.
+- Initializes Terraform (`terraform init`).
+- Validates code and generates plan.
+- Applies changes automatically if on `main`.
+- Health checks the deployed ALB.
+- Optional 10-minute wait before destroying resources for testing.
 
-Modular jobs for readability and maintainability.
+---
 
-How to Use
+## **How to Access Cost Estimates**
 
-Set up GitHub Secrets
+1. Run the workflow by pushing a commit or creating a PR.
+2. After workflow completion:
+   - Go to **Actions → [Workflow Run] → Artifacts**.
+   - Download `infracost-json`.
+   - Open `infracost.json` to see detailed cost breakdown.
 
-AWS_ROLE_ARN → IAM Role to assume for Terraform deployments.
+---
 
-INFRACOST_API_KEY → Infracost Cloud API key (optional for cost analysis).
+## **Secrets Setup Example**
 
-Modify Terraform Code
+| Secret Name        | Description                                         |
+|-------------------|-----------------------------------------------------|
+| `AWS_ROLE_ARN`     | IAM Role ARN used by GitHub Actions for AWS access |
+| `INFRACOST_API_KEY` | Infracost API key for cost estimation             |
+| `GITHUB_TOKEN`     | Automatically provided by GitHub for PR comments   |
 
-Place your Terraform configuration in the ./terraform directory (or update TF_WORKING_DIR in the workflow).
+---
 
-Workflow Execution
+## **Best Practices**
 
-On pull requests → Security scan + cost estimate.
+- Only `terraform apply` on protected branches (e.g., `main`).
+- Regularly update Infracost and GitHub Actions versions.
+- Consider shortening `Destroy` wait times for PRs to save cloud costs.
+- Use artifacts to inspect cost outputs before applying changes.
 
-On pushes to main → Full workflow including deploy, health check, and destroy.
+---
 
-Notes
+## **References**
 
-The workflow is safe to share; it does not expose secrets.
+- [Terraform Documentation](https://www.terraform.io/docs)
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [Infracost Documentation](https://www.infracost.io/docs/)
+- [Checkov Documentation](https://www.checkov.io/)
 
-Cost estimates are generated before deployment to help teams make informed decisions.
+#### Repo Structure
+.
+├── .github/
+│   └── workflows/
+│       └── deploy.yml       # GitHub Actions workflow
+├── terraform/               # Terraform configuration files
+├── README.md                # Documentation
 
-Only billable resources like EC2, ALB, and RDS will show costs.
+#### .github/workflows/deploy.yml
+
+name: Terraform CI/CD
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  AWS_REGION: "us-east-1"
+  TF_WORKING_DIR: "./terraform"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.50.3
+
+      - name: Run TFLint
+        run: |
+          tflint --init
+          tflint --format compact
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Checkov Security Scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: ${{ env.TF_WORKING_DIR }}
+          skip_check: "CKV_AWS_378,CKV2_AWS_12,CKV_AWS_260,CKV_AWS_135,CKV_AWS_91,CKV_AWS_2"
+          soft_fail: true
+
+  cost-analysis:
+    name: Cost Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Cache Terraform providers
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.terraform.d/plugin-cache
+            ${{ env.TF_WORKING_DIR }}/.terraform
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/*.tf') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Terraform Init & Plan
+        run: |
+          terraform init -upgrade
+          terraform plan -out=tfplan
+          terraform show -json tfplan > plan.json
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Install Infracost
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          infracost --version
+
+      - name: Cache Infracost
+        uses: actions/cache@v3
+        with:
+          path: ~/.local/bin/infracost
+          key: infracost-cli-${{ hashFiles('**/terraform/*.tf') }}
+
+      - name: Generate Cost Estimate
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+        run: |
+          infracost breakdown \
+            --path=${{ env.TF_WORKING_DIR }}/plan.json \
+            --format=json \
+            --out-file=infracost.json \
+            --show-skipped
+        continue-on-error: true
+
+      - name: Upload Infracost JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: infracost-json
+          path: infracost.json
+
+      - name: Comment Infracost results on PR
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          curl -sSL https://github.com/infracost/infracost-gh-action/releases/download/v0.10.0/infracost-gh-action-linux-amd64.tar.gz | tar xz
+          ./infracost-gh-action comment --path=infracost.json --github-token=${{ secrets.GITHUB_TOKEN }}
+
+  terraform:
+    name: Deploy & Test
+    runs-on: ubuntu-latest
+    needs: [security-scan, cost-analysis]
+    if: ${{ github.event_name == 'push' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Terraform Init
+        run: terraform init -upgrade
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Apply
+        if: ${{ github.ref == 'refs/heads/main' }}
+        run: terraform apply -auto-approve tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Health Check ALB
+        if: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          ALB_DNS=$(terraform output -raw alb_dns_name 2>/dev/null || echo "")
+          if [ -n "$ALB_DNS" ]; then
+            echo "Running ALB health check..."
+            curl -Is http://$ALB_DNS/ | head -n 1
+          else
+            echo "No ALB output found."
+          fi
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Wait for 10 minutes before cleanup
+        if: ${{ github.ref == 'refs/heads/main' }}
+        run: sleep 600
+
+      - name: Terraform Destroy
+        if: ${{ github.ref == 'refs/heads/main' }}
+        run: terraform destroy -auto-approve
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
