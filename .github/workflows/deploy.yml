@@ -104,9 +104,17 @@ jobs:
         run: |
           infracost breakdown \
             --path=${{ env.TF_WORKING_DIR }}/plan.json \
-            --format=github-comment \
+            --format=json \
+            --out-file=infracost.json \
             --show-skipped
         continue-on-error: true
+
+      - name: Comment Infracost results on PR
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: infracost/infracost-gh-action@v2
+        with:
+          path: infracost.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   terraform:
     name: Deploy & Test
