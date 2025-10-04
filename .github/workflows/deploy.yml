@@ -15,144 +15,102 @@ permissions:
   contents: read
 
 jobs:
-  terraform:
-    name: Terraform
+  security-scan:
+    name: Security Scan
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: TFLint
+        uses: terraform-linters/setup-tflint@v3
+        with:
+          tflint_version: v0.50.3
+      - run: tflint --init && tflint
+        working-directory: ${{ env.TF_WORKING_DIR }}
+      
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: ${{ env.TF_WORKING_DIR }}
+          skip_check: CKV_AWS_378,CKV2_AWS_12,CKV_AWS_260,CKV_AWS_135,CKV_AWS_91,CKV_AWS_2
+
+  cost-analysis:
+    name: Cost Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Infracost
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Generate Cost Report
+        run: |
+          terraform init
+          echo "=== COST ESTIMATE ==="
+          ./infracost breakdown --path . --format table
+          echo "====================="
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+  terraform:
+    name: Deploy & Test
+    runs-on: ubuntu-latest
+    needs: [security-scan, cost-analysis]
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-          role-session-name: GitHubActions-Terraform
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: "1.9.8"
 
-      - name: Terraform Format
-        id: fmt
-        run: terraform fmt -check -recursive -diff || (echo "Formatting issues found. Please run 'terraform fmt' locally.")
+      - name: Terraform Init
+        run: terraform init
         working-directory: ${{ env.TF_WORKING_DIR }}
-
-      - name: TFLint - Terraform Linter
-        uses: terraform-linters/setup-tflint@v3
-        with:
-          tflint_version: v0.50.3
-      
-      - name: Run TFLint
-        run: tflint --init && tflint
-        working-directory: ${{ env.TF_WORKING_DIR }}
-      
-      - name: Checkov Scan
-        uses: bridgecrewio/checkov-action@master
-        with:
-          directory: ${{ env.TF_WORKING_DIR }}
-          framework: terraform
-          quiet: true
-          soft_fail: true
-          skip_check: CKV_AWS_378,CKV2_AWS_12,CKV_AWS_260,CKV_AWS_135,CKV_AWS_91,CKV_AWS_2
-
-      - name: Terraform Init with Upgrade
-        run: terraform init -upgrade
-        working-directory: ${{ env.TF_WORKING_DIR }}
-
-      # Uncomment if you want Infracost (requires API key)
-      # - name: Quick Cost Estimate
-      #   if: github.event_name == 'pull_request'
-      #   uses: infracost/actions/setup@v2
-      #   with:
-      #     api-key: ${{ secrets.INFRACOST_API_KEY }}
-      # - name: Run Infracost
-      #   if: github.event_name == 'pull_request'
-      #   run: infracost breakdown --path ${{ env.TF_WORKING_DIR }} --format table
-      #   working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform Validate
-        id: validate
-        run: terraform validate -no-color
+        run: terraform validate
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform Plan
-        id: plan
-        run: terraform plan -no-color -input=false
+        run: terraform plan
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -input=false
+        if: github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      - name: Wait for 3 minutes
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      - name: Health Check
+        if: github.ref == 'refs/heads/main'
         run: |
-          echo "Waiting for 15 minutes before destruction..."
-          sleep 900
-          echo "15 minutes elapsed, proceeding with destruction..."
-
-      - name: Prepare for Destruction
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          echo "Preparing for destruction..."
-          
-          # Disable ALB deletion protection if it exists
-          ALB_ARN=$(aws elbv2 describe-load-balancers --names ntc-alb --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo "")
-          if [ ! -z "$ALB_ARN" ]; then
-            echo "Disabling deletion protection on ALB..."
-            aws elbv2 modify-load-balancer-attributes \
-              --load-balancer-arn $ALB_ARN \
-              --attributes Key=deletion_protection.enabled,Value=false
-            echo "ALB deletion protection disabled."
-          else
-            echo "ALB not found or already deleted."
+          ALB_DNS=$(terraform output -raw alb_dns_name 2>/dev/null || echo "")
+          if [ -n "$ALB_DNS" ]; then
+            curl -s http://$ALB_DNS/ && echo "✅ ALB is working"
           fi
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      - name: Terraform Destroy with Retry
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          set +e  # Don't exit on error
-          
-          # First attempt
-          echo "Attempt 1: Standard destroy..."
-          terraform destroy -auto-approve -input=false
-          EXIT_CODE=$?
-          
-          if [ $EXIT_CODE -ne 0 ]; then
-            echo "First attempt failed. Waiting 30 seconds and retrying..."
-            sleep 30
-            
-            # Second attempt
-            echo "Attempt 2: Retry destroy..."
-            terraform destroy -auto-approve -input=false
-          fi
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - name: Wait 10 minutes
+        if: github.ref == 'refs/heads/main'
+        run: sleep 100
 
-      - name: Final Cleanup Check
-        if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          echo "=== FINAL CLEANUP CHECK ==="
-          
-          # Check for remaining instances
-          echo "Checking for EC2 instances..."
-          aws ec2 describe-instances --filters "Name=tag:Name,Values=webserver-*" --query 'Reservations[].Instances[].[InstanceId, State.Name, Tags[?Key==`Name`].Value | [0]]' --output table || echo "No instances found or error"
-          
-          # Check for ALB
-          echo "Checking for ALB..."
-          aws elbv2 describe-load-balancers --names ntc-alb --query 'LoadBalancers[].[LoadBalancerName, State.Code]' --output table 2>/dev/null || echo "No ALB found"
-          
-          # Check for NAT Gateway
-          echo "Checking for NAT Gateway..."
-          aws ec2 describe-nat-gateways --filter Name=tag:Name,Values=ntc-NAT --query 'NatGateways[].[NatGatewayId, State]' --output table 2>/dev/null || echo "No NAT Gateway found"
-          
-          # Check for VPC
-          echo "Checking for VPC..."
-          aws ec2 describe-vpcs --filters Name=tag:Name,Values=ntc-Vpc --query 'Vpcs[].[VpcId, State]' --output table 2>/dev/null || echo "No VPC found"
-          
-          echo "Cleanup check completed."
+      - name: Terraform Destroy
+        if: github.ref == 'refs/heads/main'
+        run: terraform destroy -auto-approve
         working-directory: ${{ env.TF_WORKING_DIR }}
