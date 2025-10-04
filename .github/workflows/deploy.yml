@@ -107,7 +107,40 @@ jobs:
           sleep 900
           echo "15 minutes elapsed, proceeding with destruction..."
 
-      - name: Terraform Destroy
+            - name: Terraform Destroy with Retry
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform destroy -auto-approve -input=false
+        run: |
+          set +e  # Don't exit on error
+          
+          # First attempt
+          echo "Attempt 1: Standard destroy..."
+          terraform destroy -auto-approve -input=false
+          EXIT_CODE=$?
+          
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "First attempt failed. Preparing for force destroy..."
+            
+            # Disable ALB deletion protection
+            ALB_ARN=$(aws elbv2 describe-load-balancers --names ntc-alb --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo "")
+            if [ ! -z "$ALB_ARN" ]; then
+              aws elbv2 modify-load-balancer-attributes \
+                --load-balancer-arn $ALB_ARN \
+                --attributes Key=deletion_protection.enabled,Value=false
+            fi
+            
+            # Second attempt with force
+            echo "Attempt 2: Force destroy..."
+            terraform destroy -auto-approve -input=false
+          fi
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Final Cleanup Check
+        if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          echo "Checking for remaining resources..."
+          
+          # List any remaining resources
+          aws ec2 describe-instances --filters "Name=tag:Project,Values=ntc" --query 'Reservations[].Instances[].[InstanceId,State.Name]' --output table || echo "No instances found"
+          aws elbv2 describe-load-balancers --names ntc-alb --query 'LoadBalancers[].[LoadBalancerName,State.Code]' --output table || echo "No ALB found"
+          aws ec2 describe-nat-gateways --filter Name=tag:Name,Values=ntc-NAT --query 'NatGateways[].[NatGatewayId,State]' --output table || echo "No NAT Gateway found"
         working-directory: ${{ env.TF_WORKING_DIR }}
