@@ -99,7 +99,7 @@ jobs:
           key: infracost-cli-${{ hashFiles('**/terraform/*.tf') }}
 
       - name: Generate Cost Estimate
-        if: secrets.INFRACOST_API_KEY != ''
+        if: ${{secrets.INFRACOST_API_KEY != ''}}
         env:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
         run: |
