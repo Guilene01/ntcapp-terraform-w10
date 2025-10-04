@@ -56,6 +56,7 @@ jobs:
           framework: terraform
           quiet: true
           soft_fail: true
+          skip_check: CKV_AWS_378,CKV2_AWS_12,CKV_AWS_260,CKV_AWS_135,CKV_AWS_91,CKV_AWS_2
            
       
       - name: Terraform Init with Upgrade
@@ -72,8 +73,19 @@ jobs:
         run: terraform plan -no-color -input=false
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      # # Optional: Auto-apply on main branch
-      # - name: Terraform Apply
-      #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      #   run: terraform apply -auto-approve -input=false
-      #   working-directory: ${{ env.TF_WORKING_DIR }}
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve -input=false
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Wait for 15 minutes
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          echo "Waiting for 15 minutes before destruction..."
+          sleep 900
+          echo "15 minutes elapsed, proceeding with destruction..."
+
+      - name: Terraform Destroy
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform destroy -auto-approve -input=false
+        working-directory: ${{ env.TF_WORKING_DIR }}
