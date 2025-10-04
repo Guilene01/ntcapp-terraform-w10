@@ -69,8 +69,11 @@ jobs:
         with:
           terraform_version: 1.8.5
 
-      - name: Terraform Init
-        run: terraform init -upgrade
+      - name: Terraform Init & Plan
+        run: |
+          terraform init -upgrade
+          terraform plan -out=tfplan
+          terraform show -json tfplan > plan.json
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Install Infracost
@@ -93,10 +96,9 @@ jobs:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
         run: |
           infracost breakdown \
-            --path=${{ env.TF_WORKING_DIR }} \
+            --path=${{ env.TF_WORKING_DIR }}/plan.json \
             --format=table \
-            --show-skipped \
-            --sync-usage-file
+            --show-skipped
         continue-on-error: true
 
   terraform:
