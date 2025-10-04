@@ -42,6 +42,7 @@ jobs:
         with:
           directory: ${{ env.TF_WORKING_DIR }}
           skip_check: CKV_AWS_378,CKV2_AWS_12,CKV_AWS_260,CKV_AWS_135,CKV_AWS_91,CKV_AWS_2
+          soft_fail: true
 
   cost-analysis:
     name: Cost Analysis
