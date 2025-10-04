@@ -78,7 +78,7 @@ jobs:
   cost-analysis:
     name: Cost Analysis
     runs-on: ubuntu-latest
-    needs: cost-analysis  # Wait for cost analysis on PRs
+    #needs: cost-analysis  # Wait for cost analysis on PRs
 
     steps:
       - name: Checkout repository
