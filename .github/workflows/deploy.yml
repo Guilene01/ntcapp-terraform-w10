@@ -92,7 +92,7 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           infracost --version
 
-      - name: Cache Infracost CLI
+      - name: Cache Infracost
         uses: actions/cache@v3
         with:
           path: ~/.local/bin/infracost
