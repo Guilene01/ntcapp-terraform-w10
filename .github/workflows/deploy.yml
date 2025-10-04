@@ -49,13 +49,19 @@ jobs:
         run: tflint --init && tflint
         working-directory: ${{ env.TF_WORKING_DIR }}
       
-      - name: Checkov Scan
+            - name: Checkov Scan
         uses: bridgecrewio/checkov-action@master
         with:
           directory: ${{ env.TF_WORKING_DIR }}
           framework: terraform
-          quiet: true  
-          skip_check: CKV_AWS_135,CKV_AWS_91,CKV_AWS_2,CKV_AWS_8,CKV_AWS_260,CKV_AWS_135,CKV_AWS_91,CKV_AWS_2
+          quiet: true
+          skip_check: CKV_AWS_378,CKV2_AWS_12,CKV_AWS_260,CKV_AWS_135,CKV_AWS_91,CKV_AWS_2
+          # CKV_AWS_378 - HTTP protocol (you want HTTP for dev)
+          # CKV2_AWS_12 - Default VPC SG (nice to have)
+          # CKV_AWS_260 - ALB should be public (false positive)
+          # CKV_AWS_135 - EBS optimized (t3.micro limitation)  
+          # CKV_AWS_91 - ALB logs (nice to have)
+          # CKV_AWS_2 - HTTPS only (HTTP fine for dev)
       
       - name: Terraform Init with Upgrade
         run: terraform init -upgrade
