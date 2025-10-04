@@ -63,13 +63,14 @@ jobs:
       - name: Install Infracost
         run: |
           curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh
-        working-directory: ${{ env.TF_WORKING_DIR }}
+          echo "Infracost installed to: $(which infracost)"
 
       - name: Generate Cost Report
         run: |
+          cd ${{ env.TF_WORKING_DIR }}
           terraform init -upgrade
           echo "=== COST ESTIMATE ==="
-          ./infracost breakdown --path . --format table
+          infracost breakdown --path . --format table
           echo "====================="
         working-directory: ${{ env.TF_WORKING_DIR }}
 
@@ -120,7 +121,7 @@ jobs:
 
       - name: Wait 10 minutes
         if: github.ref == 'refs/heads/main'
-        run: sleep 600
+        run: sleep 200
 
       - name: Terraform Destroy
         if: github.ref == 'refs/heads/main'
