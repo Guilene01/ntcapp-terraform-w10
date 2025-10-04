@@ -109,13 +109,6 @@ jobs:
             --show-skipped
         continue-on-error: true
 
-      - name: Comment Infracost results on PR
-        if: ${{ github.event_name == 'pull_request' && secrets.INFRACOST_API_KEY != '' }}
-        uses: infracost/infracost-gh-action@v2
-        with:
-          path: ${{ env.TF_WORKING_DIR }}/plan.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
   terraform:
     name: Deploy & Test
     runs-on: ubuntu-latest
