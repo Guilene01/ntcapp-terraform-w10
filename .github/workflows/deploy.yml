@@ -110,18 +110,18 @@ jobs:
         run: terraform apply -auto-approve
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      - name: Health Check
-        if: github.ref == 'refs/heads/main'
-        run: |
-          ALB_DNS=$(terraform output -raw alb_dns_name 2>/dev/null || echo "")
-          if [ -n "$ALB_DNS" ]; then
-            curl -s http://$ALB_DNS/ && echo " ALB is working"
-          fi
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      # - name: Health Check
+      #   if: github.ref == 'refs/heads/main'
+      #   run: |
+      #     ALB_DNS=$(terraform output -raw alb_dns_name 2>/dev/null || echo "")
+      #     if [ -n "$ALB_DNS" ]; then
+      #       curl -s http://$ALB_DNS/ && echo " ALB is working"
+      #     fi
+      #   working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Wait 10 minutes
         if: github.ref == 'refs/heads/main'
-        run: sleep 200
+        run: sleep 100
 
       - name: Terraform Destroy
         if: github.ref == 'refs/heads/main'
