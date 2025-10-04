@@ -4,7 +4,7 @@ resource "aws_vpc" "my-vpc" {
   enable_dns_hostnames = true
   enable_dns_support   = true
   instance_tenancy     = "default"
-  
+
   tags = {
     Name       = "ntc-Vpc"
     env        = "Dev"
@@ -16,9 +16,9 @@ resource "aws_vpc" "my-vpc" {
 
 # Restrict default security group
 resource "aws_default_security_group" "default" {
-  vpc_id = aws_vpc.my-vpc.id
+  vpc_id  = aws_vpc.my-vpc.id
   ingress = []
-  egress = []
+  egress  = []
   tags = {
     Name = "ntc-default-sg-restricted"
   }

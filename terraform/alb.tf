@@ -42,7 +42,7 @@ resource "aws_lb" "alb" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
   subnets            = [aws_subnet.public1.id, aws_subnet.public2.id]
-  
+
   # ✅ SECURITY FIXES
   enable_deletion_protection = false
   drop_invalid_header_fields = false

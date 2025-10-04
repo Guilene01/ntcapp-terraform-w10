@@ -5,13 +5,13 @@ resource "aws_instance" "web1" {
   vpc_security_group_ids      = [aws_security_group.web_sg.id]
   associate_public_ip_address = false
   monitoring                  = true
-  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name  # ✅ ADDED: IAM role
-  
+  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name # ✅ ADDED: IAM role
+
   metadata_options {
     http_endpoint = "enabled"
     http_tokens   = "required"
   }
-  
+
   root_block_device {
     encrypted   = true
     volume_type = "gp3"
@@ -19,7 +19,7 @@ resource "aws_instance" "web1" {
   }
 
   user_data = file("setup.sh")
-  
+
   tags = {
     Name = "webserver-1"
     Env  = "dev"
@@ -33,13 +33,13 @@ resource "aws_instance" "web2" {
   vpc_security_group_ids      = [aws_security_group.web_sg.id]
   associate_public_ip_address = false
   monitoring                  = true
-  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name  # ✅ ADDED: IAM role
-  
+  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name # ✅ ADDED: IAM role
+
   metadata_options {
     http_endpoint = "enabled"
     http_tokens   = "required"
   }
-  
+
   root_block_device {
     encrypted   = true
     volume_type = "gp3"
@@ -47,7 +47,7 @@ resource "aws_instance" "web2" {
   }
 
   user_data = file("setup.sh")
-  
+
   tags = {
     Name = "webserver-2"
     Env  = "dev"
