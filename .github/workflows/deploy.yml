@@ -67,7 +67,6 @@ jobs:
 
       - name: Generate Cost Report
         run: |
-          cd ${{ env.TF_WORKING_DIR }}
           terraform init -upgrade
           echo "=== COST ESTIMATE ==="
           infracost breakdown --path . --format table
