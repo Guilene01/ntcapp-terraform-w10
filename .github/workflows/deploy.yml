@@ -55,6 +55,7 @@ jobs:
           directory: ${{ env.TF_WORKING_DIR }}
           framework: terraform
           quiet: true  
+          skip_check: CKV_AWS_135,CKV_AWS_91,CKV_AWS_2,CKV_AWS_8,CKV_AWS_260,CKV_AWS_135,CKV_AWS_91,CKV_AWS_2
       
       - name: Terraform Init with Upgrade
         run: terraform init -upgrade

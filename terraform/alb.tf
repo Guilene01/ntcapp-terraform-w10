@@ -10,19 +10,17 @@ resource "aws_lb_target_group" "tg1" {
     enabled             = true
     path                = "/"
     protocol            = "HTTP"
-    matcher             = 200
-    interval            = 10
-    timeout             = 6
-    port                = "traffic-port"
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    matcher             = "200"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
   }
 
   tags = {
     Name = "app-tg"
     Env  = "dev"
   }
-  depends_on = [aws_vpc.my-vpc]
 }
 
 //attach instances to target group
@@ -38,6 +36,75 @@ resource "aws_lb_target_group_attachment" "ntc-tg-attach2" {
   port             = 80
 }
 
+# Create S3 bucket for ALB access logs
+resource "aws_s3_bucket" "alb_logs" {
+  bucket = "ntc-alb-logs-${random_id.suffix.hex}"
+
+  tags = {
+    Name        = "NTC ALB Access Logs"
+    Environment = "dev"
+    Project     = "ntcapp"
+  }
+}
+
+# Block public access to the logs bucket
+resource "aws_s3_bucket_public_access_block" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Enable bucket versioning for extra protection
+resource "aws_s3_bucket_versioning" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# S3 bucket policy for ALB logging
+resource "aws_s3_bucket_policy" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::127311923021:root"  # ELB service account for us-east-1
+        }
+        Action = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*",
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.alb_logs.arn
+      }
+    ]
+  })
+}
+
 // application load balancer
 resource "aws_lb" "alb" {
   name               = "ntc-alb"
@@ -46,9 +113,16 @@ resource "aws_lb" "alb" {
   subnets            = [aws_subnet.public1.id, aws_subnet.public2.id]
   
   # ✅ SECURITY FIXES
-  enable_deletion_protection = true  # Was false - Fixes CKV_AWS_150
-  drop_invalid_header_fields = true  # Added - Fixes CKV_AWS_131
-  enable_http2               = true  # Added - Best practice
+  enable_deletion_protection = true
+  drop_invalid_header_fields = true
+  enable_http2               = true
+
+  # ✅ ACCESS LOGGING
+  access_logs {
+    bucket  = aws_s3_bucket.alb_logs.bucket
+    enabled = true
+    prefix  = "alb-logs"
+  }
 
   tags = {
     Name = "ntc-alb"

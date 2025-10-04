@@ -12,20 +12,12 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    description = "Allow HTTPS from anywhere"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   egress {
-    description = "Allow outbound traffic to web instances"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    security_groups = [aws_security_group.web_sg.id]  # ✅ Restrict to web SG only
+    description     = "Allow outbound HTTP traffic to web instances"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.web_sg.id]
   }
 
   tags = {
@@ -36,7 +28,7 @@ resource "aws_security_group" "alb_sg" {
 // security group for ec2 instances
 resource "aws_security_group" "web_sg" {
   name        = "web-sg"
-  description = "Security group for web servers"
+  description = "Security group for web servers in private subnets"
   vpc_id      = aws_vpc.my-vpc.id
 
   ingress {
@@ -44,31 +36,31 @@ resource "aws_security_group" "web_sg" {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
-    security_groups = [aws_security_group.alb_sg.id]  # ✅ Only allow from ALB
-  }
-
-  ingress {
-    description = "Allow SSH from specific IP range"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]  # ✅ Restrict SSH to VPC only (or your IP)
+    security_groups = [aws_security_group.alb_sg.id]
   }
 
   egress {
-    description = "Allow outbound traffic for updates"
+    description = "Allow outbound HTTPS for updates"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # ✅ Allow HTTPS for package updates
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
-    description = "Allow outbound HTTP traffic"
+    description = "Allow outbound HTTP for updates"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # ✅ Allow HTTP for package updates
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Allow outbound DNS queries"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
