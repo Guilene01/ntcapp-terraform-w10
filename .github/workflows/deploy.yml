@@ -64,6 +64,16 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Cache Terraform providers
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.terraform.d/plugin-cache
+            ${{ env.TF_WORKING_DIR }}/.terraform
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/*.tf') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -82,24 +92,29 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           infracost --version
 
-      - name: Setup Infracost API key
-        env:
-          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
-        run: |
-          if [ -z "$INFRACOST_API_KEY" ]; then
-            echo "⚠️  Infracost API key not found, skipping cost analysis."
-            exit 0
-          fi
+      - name: Cache Infracost CLI
+        uses: actions/cache@v3
+        with:
+          path: ~/.local/bin/infracost
+          key: infracost-cli-${{ hashFiles('**/terraform/*.tf') }}
 
       - name: Generate Cost Estimate
+        if: secrets.INFRACOST_API_KEY != ''
         env:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
         run: |
           infracost breakdown \
             --path=${{ env.TF_WORKING_DIR }}/plan.json \
-            --format=table \
+            --format=github-comment \
             --show-skipped
         continue-on-error: true
+
+      - name: Comment Infracost results on PR
+        if: github.event_name == 'pull_request' && secrets.INFRACOST_API_KEY != ''
+        uses: infracost/infracost-gh-action@v2
+        with:
+          path: ${{ env.TF_WORKING_DIR }}/plan.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   terraform:
     name: Deploy & Test
@@ -139,7 +154,7 @@ jobs:
         run: terraform apply -auto-approve tfplan
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      - name: Health Check (Optional)
+      - name: Health Check ALB
         if: github.ref == 'refs/heads/main'
         run: |
           ALB_DNS=$(terraform output -raw alb_dns_name 2>/dev/null || echo "")
