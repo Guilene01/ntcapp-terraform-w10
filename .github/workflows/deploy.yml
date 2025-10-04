@@ -107,7 +107,7 @@ jobs:
           sleep 900
           echo "15 minutes elapsed, proceeding with destruction..."
 
-            - name: Terraform Destroy with Retry
+      - name: Terraform Destroy with Retry
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           set +e  # Don't exit on error
