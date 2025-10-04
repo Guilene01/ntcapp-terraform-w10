@@ -75,8 +75,8 @@ jobs:
             --pull-request ${{ github.event.pull_request.number }} \
             --github-token ${{ secrets.GITHUB_TOKEN }}
 
-  terraform:
-    name: Terraform
+  cost-analysis:
+    name: Cost Analysis
     runs-on: ubuntu-latest
     needs: cost-analysis  # Wait for cost analysis on PRs
 
