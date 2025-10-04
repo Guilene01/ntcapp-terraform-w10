@@ -20,25 +20,31 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
 
-      - name: Terraform Format
+      - name: Terraform Format Check
         run: terraform fmt -check -recursive
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      - name: TFLint
-        uses: terraform-linters/setup-tflint@v3
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
         with:
           tflint_version: v0.50.3
-      - run: tflint --init && tflint
+
+      - name: Run TFLint
+        run: |
+          tflint --init
+          tflint --format compact
         working-directory: ${{ env.TF_WORKING_DIR }}
-      
-      - name: Checkov
-        uses: bridgecrewio/checkov-action@master
+
+      - name: Checkov Security Scan
+        uses: bridgecrewio/checkov-action@v12
         with:
           directory: ${{ env.TF_WORKING_DIR }}
           skip_check: CKV_AWS_378,CKV2_AWS_12,CKV_AWS_260,CKV_AWS_135,CKV_AWS_91,CKV_AWS_2
@@ -47,32 +53,51 @@ jobs:
   cost-analysis:
     name: Cost Analysis
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Terraform Init
+        run: terraform init -upgrade
+        working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Install Infracost
         run: |
           curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh
-          echo "Infracost installed to: $(which infracost)"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          infracost --version
 
-      # - name: Generate Cost Report
-      #   run: |
-      #     terraform init -upgrade
-      #     echo "=== COST ESTIMATE ==="
-      #     infracost breakdown --path . --format table
-      #     echo "====================="
-      #   working-directory: ${{ env.TF_WORKING_DIR }}
+      - name: Setup Infracost API key
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+        run: |
+          if [ -z "$INFRACOST_API_KEY" ]; then
+            echo "⚠️  Infracost API key not found, skipping cost analysis."
+            exit 0
+          fi
+
+      - name: Generate Cost Estimate
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+        run: |
+          infracost breakdown \
+            --path=${{ env.TF_WORKING_DIR }} \
+            --format=table \
+            --show-skipped \
+            --sync-usage-file
+        continue-on-error: true
 
   terraform:
     name: Deploy & Test
@@ -81,17 +106,19 @@ jobs:
     if: github.event_name == 'push'
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
 
       - name: Terraform Init
         run: terraform init -upgrade
@@ -102,26 +129,29 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform Plan
-        run: terraform plan
+        run: terraform plan -out=tfplan
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve tfplan
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      # - name: Health Check
-      #   if: github.ref == 'refs/heads/main'
-      #   run: |
-      #     ALB_DNS=$(terraform output -raw alb_dns_name 2>/dev/null || echo "")
-      #     if [ -n "$ALB_DNS" ]; then
-      #       curl -s http://$ALB_DNS/ && echo " ALB is working"
-      #     fi
-      #   working-directory: ${{ env.TF_WORKING_DIR }}
-
-      - name: Wait 10 minutes
+      - name: Health Check (Optional)
         if: github.ref == 'refs/heads/main'
-        run: sleep 100
+        run: |
+          ALB_DNS=$(terraform output -raw alb_dns_name 2>/dev/null || echo "")
+          if [ -n "$ALB_DNS" ]; then
+            echo "Running ALB health check..."
+            curl -Is http://$ALB_DNS/ | head -n 1
+          else
+            echo "No ALB output found."
+          fi
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Wait for 10 minutes before cleanup
+        if: github.ref == 'refs/heads/main'
+        run: sleep 600
 
       - name: Terraform Destroy
         if: github.ref == 'refs/heads/main'
