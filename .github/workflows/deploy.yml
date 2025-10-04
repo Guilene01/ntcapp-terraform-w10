@@ -65,13 +65,13 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh
           echo "Infracost installed to: $(which infracost)"
 
-      - name: Generate Cost Report
-        run: |
-          terraform init -upgrade
-          echo "=== COST ESTIMATE ==="
-          infracost breakdown --path . --format table
-          echo "====================="
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      # - name: Generate Cost Report
+      #   run: |
+      #     terraform init -upgrade
+      #     echo "=== COST ESTIMATE ==="
+      #     infracost breakdown --path . --format table
+      #     echo "====================="
+      #   working-directory: ${{ env.TF_WORKING_DIR }}
 
   terraform:
     name: Deploy & Test
